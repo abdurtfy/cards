@@ -30,59 +30,76 @@ tabs.forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
 
+function statusTone(value) {
+  const v = String(value || "").toLowerCase();
+  if (["paid", "delivered", "shipped", "sent", "completed", "success"].some((k) => v.includes(k))) return "ok";
+  if (["fail", "error", "cancel", "refund"].some((k) => v.includes(k))) return "bad";
+  if (!v || ["pending", "not_created", "unknown"].includes(v)) return "wait";
+  return "info";
+}
+
+function badge(label, value) {
+  const tone = statusTone(value);
+  const display = value || "pending";
+  return `<span class="order-badge tone-${tone}"><em>${label}</em>${display}</span>`;
+}
+
 function renderOrders(orders) {
   orderCount.textContent = `${orders.length} ${orders.length === 1 ? "order" : "orders"}`;
   ordersList.innerHTML = orders.length
     ? orders
-        .map(
-          (order) => `
+        .map((order) => {
+          const cityLine = [order.customer?.city, order.customer?.state, order.customer?.pin]
+            .filter(Boolean)
+            .join(", ");
+          const contactLine = [order.customer?.email, order.customer?.phone].filter(Boolean).join(" · ");
+          return `
             <article class="admin-order">
-              <div class="admin-order-head">
-                <div>
-                  <h2>${order.id}</h2>
-                  <p class="muted">${formatDate(order.created_at)}</p>
+              <header class="order-top">
+                <div class="order-id">
+                  <span class="order-num">#${order.id}</span>
+                  <span class="order-date">${formatDate(order.created_at)}</span>
                 </div>
-                <span class="status-pill">${order.status || "unknown"}</span>
+                <div class="order-total">${formatCurrency(order.total)}</div>
+              </header>
+
+              <div class="order-badges">
+                ${badge("Order", order.status)}
+                ${badge("Payment", order.payment_status)}
+                ${badge("Shipping", order.shipping_status)}
               </div>
 
-              <div class="admin-grid">
-                <div>
-                  <h3>Customer</h3>
-                  <p>${order.customer?.name || "Not provided"}</p>
-                  <p>${order.customer?.phone || ""}</p>
-                  <p>${order.customer?.email || ""}</p>
-                </div>
-                <div>
-                  <h3>Address</h3>
-                  <p>${order.customer?.address || "Not provided"}</p>
-                  <p>${[order.customer?.city, order.customer?.state, order.customer?.pin].filter(Boolean).join(", ")}</p>
-                </div>
-                <div>
-                  <h3>Status</h3>
-                  <p>Payment: ${order.payment_status || "pending"}</p>
-                  <p>Shipping: ${order.shipping_status || "not_created"}</p>
-                  <p>Shiprocket: ${order.shiprocket_order_id || "pending"}</p>
-                  <p>Email: ${order.email_status || "pending"}</p>
-                  <p>Shipping email: ${order.shipping_email_status || "pending"}</p>
-                </div>
-                <div>
-                  <h3>Total</h3>
-                  <p>${formatCurrency(order.total)}</p>
-                  <p>Razorpay: ${order.razorpay_order_id || "pending"}</p>
-                  <p>AWB: ${order.awb_code || "pending"}</p>
-                </div>
+              <div class="order-customer">
+                <p class="order-name">${order.customer?.name || "Not provided"}</p>
+                ${contactLine ? `<p class="muted">${contactLine}</p>` : ""}
+                <p class="muted">${order.customer?.address || "Not provided"}${cityLine ? ` · ${cityLine}` : ""}</p>
               </div>
 
-              <div class="admin-items">
-                ${(order.lines || [])
-                  .map((item) => `<span>${item.name} x ${item.quantity}</span>`)
-                  .join("")}
-              </div>
+              ${
+                (order.lines || []).length
+                  ? `<div class="admin-items">
+                      ${(order.lines || [])
+                        .map((item) => `<span>${item.name} × ${item.quantity}</span>`)
+                        .join("")}
+                    </div>`
+                  : ""
+              }
+
+              <details class="order-details">
+                <summary>Technical details</summary>
+                <dl class="order-meta">
+                  <dt>Razorpay</dt><dd>${order.razorpay_order_id || "pending"}</dd>
+                  <dt>Shiprocket</dt><dd>${order.shiprocket_order_id || "pending"}</dd>
+                  <dt>AWB</dt><dd>${order.awb_code || "pending"}</dd>
+                  <dt>Confirmation email</dt><dd>${order.email_status || "pending"}</dd>
+                  <dt>Shipping email</dt><dd>${order.shipping_email_status || "pending"}</dd>
+                </dl>
+              </details>
 
               ${order.error ? `<p class="status-line">${order.error}</p>` : ""}
             </article>
-          `,
-        )
+          `;
+        })
         .join("")
     : `<p class="muted">No orders yet. Create one from checkout and it will appear here.</p>`;
 }
