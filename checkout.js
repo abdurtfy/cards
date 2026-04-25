@@ -2,7 +2,6 @@ const summaryItems = document.querySelector("#summaryItems");
 const subtotal = document.querySelector("#subtotal");
 const shipping = document.querySelector("#shipping");
 const total = document.querySelector("#total");
-const serviceabilityButton = document.querySelector("#serviceabilityButton");
 const checkoutForm = document.querySelector("#checkoutForm");
 const checkoutStatus = document.querySelector("#checkoutStatus");
 
@@ -44,29 +43,6 @@ async function postJson(url, payload) {
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
 }
-
-serviceabilityButton.addEventListener("click", async () => {
-  const customer = getCustomerPayload();
-  if (!/^\d{6}$/.test(customer.pin || "")) {
-    checkoutStatus.textContent = "Enter a valid 6-digit PIN code.";
-    return;
-  }
-
-  checkoutStatus.textContent = "Checking Shiprocket serviceability...";
-  try {
-    const result = await postJson("/api/shiprocket/serviceability", {
-      pickup_postcode: "110001",
-      delivery_postcode: customer.pin,
-      weight: 0.2,
-      cod: 0,
-    });
-    checkoutStatus.textContent = result.available
-      ? `Shiprocket delivery available. Estimated freight: ${formatCurrency(result.freight || 0)}.`
-      : "Shiprocket did not return an available courier for this PIN.";
-  } catch (error) {
-    checkoutStatus.textContent = error.message;
-  }
-});
 
 checkoutForm.addEventListener("submit", async (event) => {
   event.preventDefault();
