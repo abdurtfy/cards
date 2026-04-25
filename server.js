@@ -241,7 +241,11 @@ async function shiprocketRequest(pathname, options = {}) {
     },
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.message || "Shiprocket request failed");
+  if (!response.ok) {
+    console.error("Shiprocket error", response.status, "on", pathname, "->", JSON.stringify(data));
+    const detail = data.errors ? ` (${JSON.stringify(data.errors)})` : "";
+    throw new Error((data.message || "Shiprocket request failed") + detail);
+  }
   return data;
 }
 
@@ -495,11 +499,16 @@ function verifyRazorpaySignature(payment) {
 
 async function createShiprocketOrder({ items, customer, payment }) {
   const order = calculateOrder(items);
+  const fullName = String(customer.name || "").trim();
+  const nameParts = fullName.split(/\s+/);
+  const firstName = nameParts.shift() || "Customer";
+  const lastName = nameParts.join(" ") || ".";
   const body = {
     order_id: payment?.razorpay_order_id || `cds_${Date.now()}`,
     order_date: new Date().toISOString().slice(0, 10),
     pickup_location: process.env.SHIPROCKET_PICKUP_LOCATION || "Primary",
-    billing_customer_name: customer.name,
+    billing_customer_name: firstName,
+    billing_last_name: lastName,
     billing_address: customer.address,
     billing_city: customer.city,
     billing_pincode: customer.pin,
