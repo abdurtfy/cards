@@ -25,22 +25,67 @@ const baseProducts = [
   { id: "silver-static", name: "Silver Static", price: 99 },
 ];
 
-function readProductOverrides() {
-  if (!fs.existsSync(PRODUCTS_FILE)) return {};
+const KV_URL = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const USE_KV = Boolean(KV_URL && KV_TOKEN);
+
+async function kvGet(key) {
+  const response = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` },
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (data.result == null) return null;
   try {
-    return JSON.parse(fs.readFileSync(PRODUCTS_FILE, "utf8"));
+    return JSON.parse(data.result);
   } catch {
-    return {};
+    return data.result;
   }
 }
 
-function writeProductOverrides(data) {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(data, null, 2));
+async function kvSet(key, value) {
+  const response = await fetch(`${KV_URL}/set/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${KV_TOKEN}` },
+    body: JSON.stringify(value),
+  });
+  if (!response.ok) {
+    throw new Error(`KV set failed: ${response.status} ${await response.text()}`);
+  }
 }
 
-function getProducts() {
-  const overrides = readProductOverrides();
+async function loadStore(key, file, fallback) {
+  if (USE_KV) {
+    const value = await kvGet(key);
+    return value == null ? fallback : value;
+  }
+  if (!fs.existsSync(file)) return fallback;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function saveStore(key, file, value) {
+  if (USE_KV) {
+    await kvSet(key, value);
+    return;
+  }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(value, null, 2));
+}
+
+async function readProductOverrides() {
+  return loadStore("products", PRODUCTS_FILE, {});
+}
+
+async function writeProductOverrides(data) {
+  await saveStore("products", PRODUCTS_FILE, data);
+}
+
+async function getProducts() {
+  const overrides = await readProductOverrides();
   return baseProducts.map((p) => {
     const o = overrides[p.id] || {};
     return {
@@ -52,11 +97,6 @@ function getProducts() {
       description: typeof o.description === "string" ? o.description : "",
     };
   });
-}
-
-const UPLOADS_DIR = path.join(__dirname, "uploads");
-function ensureUploadsDir() {
-  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 const mimeTypes = {
@@ -133,55 +173,42 @@ function safeCompare(value, expected) {
   return crypto.timingSafeEqual(first, second);
 }
 
-function readOrders() {
-  return readJsonFile(ORDERS_FILE, []);
+async function readOrders() {
+  return loadStore("orders", ORDERS_FILE, []);
 }
 
-function readJsonFile(filePath, fallback) {
-  if (!fs.existsSync(filePath)) return fallback;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
+async function writeOrders(orders) {
+  await saveStore("orders", ORDERS_FILE, orders);
 }
 
-function writeJsonFile(filePath, value) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
-}
-
-function writeOrders(orders) {
-  writeJsonFile(ORDERS_FILE, orders);
-}
-
-function hasProcessedWebhook(id) {
+async function hasProcessedWebhook(id) {
   if (!id) return false;
-  return readJsonFile(WEBHOOK_EVENTS_FILE, []).some((event) => event.id === id);
+  const events = await loadStore("webhook_events", WEBHOOK_EVENTS_FILE, []);
+  return events.some((event) => event.id === id);
 }
 
-function saveProcessedWebhook(id, source, event) {
+async function saveProcessedWebhook(id, source, event) {
   if (!id) return;
-  const events = readJsonFile(WEBHOOK_EVENTS_FILE, []);
+  const events = await loadStore("webhook_events", WEBHOOK_EVENTS_FILE, []);
   events.unshift({ id, source, event, processed_at: new Date().toISOString() });
-  writeJsonFile(WEBHOOK_EVENTS_FILE, events.slice(0, 500));
+  await saveStore("webhook_events", WEBHOOK_EVENTS_FILE, events.slice(0, 500));
 }
 
-function saveOrder(order) {
-  const orders = readOrders();
+async function saveOrder(order) {
+  const orders = await readOrders();
   const existingIndex = orders.findIndex((item) => item.id === order.id);
   if (existingIndex >= 0) orders[existingIndex] = order;
   else orders.unshift(order);
-  writeOrders(orders);
+  await writeOrders(orders);
   return order;
 }
 
-function updateOrder(id, patch) {
-  const orders = readOrders();
+async function updateOrder(id, patch) {
+  const orders = await readOrders();
   const order = orders.find((item) => item.id === id || item.razorpay_order_id === id);
   if (!order) return null;
   Object.assign(order, patch, { updated_at: new Date().toISOString() });
-  writeOrders(orders);
+  await writeOrders(orders);
   return order;
 }
 
@@ -240,8 +267,8 @@ function readBody(req, maxBytes = 1_000_000) {
   });
 }
 
-function calculateOrder(items = []) {
-  const catalog = getProducts();
+async function calculateOrder(items = []) {
+  const catalog = await getProducts();
   const lines = items.map((item) => {
     const product = catalog.find((candidate) => candidate.id === item.id);
     const quantity = Number(item.quantity || 0);
@@ -425,7 +452,7 @@ async function fulfillPaidOrder(order, payment = {}) {
       razorpay_payment_id: payment.razorpay_payment_id || order.razorpay_payment_id,
     },
   });
-  const updatedOrder = updateOrder(order.id, {
+  const updatedOrder = await updateOrder(order.id, {
     status: "ready_to_ship",
     shipping_status: shiprocketOrder.shipping_status || "created",
     shiprocket_order_id: shiprocketOrder.order_id || shiprocketOrder.shiprocket_order_id,
@@ -438,12 +465,12 @@ async function fulfillPaidOrder(order, payment = {}) {
 async function markOrderEmails(order) {
   try {
     const emails = await sendOrderEmails(order);
-    updateOrder(order.id, {
+    await updateOrder(order.id, {
       email_status: emails.confirmationEmail.status,
       shipping_email_status: emails.shippingEmail.status,
     });
   } catch (emailError) {
-    updateOrder(order.id, {
+    await updateOrder(order.id, {
       email_status: "failed",
       shipping_email_status: "failed",
       email_error: emailError.message,
@@ -457,15 +484,16 @@ function verifyRazorpayWebhook(rawBody, signature) {
   return safeCompare(signature, expected);
 }
 
-function findOrderFromWebhookPayload(payload) {
+async function findOrderFromWebhookPayload(payload) {
   const payment = payload.payload?.payment?.entity;
   const orderEntity = payload.payload?.order?.entity;
   const razorpayOrderId = payment?.order_id || orderEntity?.id;
   if (!razorpayOrderId) return null;
-  return readOrders().find((order) => order.razorpay_order_id === razorpayOrderId);
+  const orders = await readOrders();
+  return orders.find((order) => order.razorpay_order_id === razorpayOrderId);
 }
 
-function findShiprocketOrder(payload) {
+async function findShiprocketOrder(payload) {
   const candidates = [
     payload.order_id,
     payload.shiprocket_order_id,
@@ -476,7 +504,8 @@ function findShiprocketOrder(payload) {
     payload.shipment?.awb_code,
     payload.shipment?.order_id,
   ].filter(Boolean).map(String);
-  return readOrders().find((order) =>
+  const orders = await readOrders();
+  return orders.find((order) =>
     candidates.includes(String(order.shiprocket_order_id)) ||
     candidates.includes(String(order.awb_code)) ||
     candidates.includes(String(order.razorpay_order_id)) ||
@@ -485,14 +514,14 @@ function findShiprocketOrder(payload) {
 }
 
 async function createRazorpayOrder(payload) {
-  const order = calculateOrder(payload.items);
+  const order = await calculateOrder(payload.items);
   const amount = order.total * 100;
   const localOrderId = `cds_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
   const confirmationToken = crypto.randomBytes(32).toString("base64url");
 
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
     const demoOrderId = `order_demo_${Date.now()}`;
-    saveOrder({
+    await saveOrder({
       id: localOrderId,
       razorpay_order_id: demoOrderId,
       status: "payment_pending",
@@ -530,7 +559,7 @@ async function createRazorpayOrder(payload) {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error?.description || "Razorpay order failed");
-  saveOrder({
+  await saveOrder({
     id: localOrderId,
     razorpay_order_id: data.id,
     status: "payment_pending",
@@ -554,7 +583,7 @@ function verifyRazorpaySignature(payment) {
 }
 
 async function createShiprocketOrder({ items, customer, payment }) {
-  const order = calculateOrder(items);
+  const order = await calculateOrder(items);
   const fullName = String(customer.name || "").trim();
   const nameParts = fullName.split(/\s+/);
   const firstName = nameParts.shift() || "Customer";
@@ -603,7 +632,7 @@ async function handleApi(req, res, url) {
     const payload = body.json;
 
     if (req.method === "GET" && url.pathname === "/api/products") {
-      return json(res, 200, { products: getProducts() });
+      return json(res, 200, { products: await getProducts() });
     }
 
     if (req.method === "POST" && url.pathname === "/api/admin/login") {
@@ -629,18 +658,19 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/orders") {
-      return json(res, 200, { orders: readOrders().map(publicOrder) });
+      const orders = await readOrders();
+      return json(res, 200, { orders: orders.map(publicOrder) });
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/products") {
-      return json(res, 200, { products: getProducts() });
+      return json(res, 200, { products: await getProducts() });
     }
 
     if (req.method === "PUT" && url.pathname === "/api/admin/products") {
       const id = String(payload.id || "");
       const product = baseProducts.find((p) => p.id === id);
       if (!product) return json(res, 404, { error: "Product not found" });
-      const overrides = readProductOverrides();
+      const overrides = await readProductOverrides();
       const current = overrides[id] || {};
       const next = { ...current };
       if (payload.name !== undefined) {
@@ -672,8 +702,9 @@ async function handleApi(req, res, url) {
         next.description = description;
       }
       overrides[id] = next;
-      writeProductOverrides(overrides);
-      return json(res, 200, { product: getProducts().find((p) => p.id === id) });
+      await writeProductOverrides(overrides);
+      const products = await getProducts();
+      return json(res, 200, { product: products.find((p) => p.id === id) });
     }
 
     if (req.method === "POST" && url.pathname === "/api/admin/products/upload") {
@@ -683,35 +714,36 @@ async function handleApi(req, res, url) {
       const dataUrl = String(payload.dataUrl || "");
       const match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,(.+)$/);
       if (!match) return json(res, 400, { error: "Send a PNG, JPG, WEBP or GIF image" });
-      const ext = match[1] === "jpeg" ? "jpg" : match[1];
       const buffer = Buffer.from(match[2], "base64");
-      if (buffer.length > 4_000_000) return json(res, 400, { error: "Image must be under 4 MB" });
-      ensureUploadsDir();
-      const filename = `${id}-${Date.now()}.${ext}`;
-      fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
-      const overrides = readProductOverrides();
-      overrides[id] = { ...(overrides[id] || {}), image: `/uploads/${filename}` };
-      writeProductOverrides(overrides);
-      return json(res, 200, { product: getProducts().find((p) => p.id === id) });
+      if (buffer.length > 1_500_000) {
+        return json(res, 400, { error: "Image must be under 1.5 MB. Compress or resize it first." });
+      }
+      const overrides = await readProductOverrides();
+      overrides[id] = { ...(overrides[id] || {}), image: dataUrl };
+      await writeProductOverrides(overrides);
+      const products = await getProducts();
+      return json(res, 200, { product: products.find((p) => p.id === id) });
     }
 
     if (req.method === "DELETE" && url.pathname === "/api/admin/products/image") {
       const id = String(payload.id || "");
       const product = baseProducts.find((p) => p.id === id);
       if (!product) return json(res, 404, { error: "Product not found" });
-      const overrides = readProductOverrides();
+      const overrides = await readProductOverrides();
       if (overrides[id]) {
         const { image, ...rest } = overrides[id];
         overrides[id] = rest;
-        writeProductOverrides(overrides);
+        await writeProductOverrides(overrides);
       }
-      return json(res, 200, { product: getProducts().find((p) => p.id === id) });
+      const products = await getProducts();
+      return json(res, 200, { product: products.find((p) => p.id === id) });
     }
 
     if (req.method === "GET" && url.pathname === "/api/order/confirmation") {
       const id = url.searchParams.get("id");
       const token = url.searchParams.get("token");
-      const order = readOrders().find((item) => item.id === id);
+      const orders = await readOrders();
+      const order = orders.find((item) => item.id === id);
       if (!order || !order.confirmation_token || !token || !safeCompare(token, order.confirmation_token)) {
         return json(res, 404, { error: "Order not found" });
       }
@@ -727,12 +759,12 @@ async function handleApi(req, res, url) {
       if (!verifyRazorpayWebhook(body.raw, req.headers["x-razorpay-signature"])) {
         return json(res, 400, { error: "Invalid Razorpay webhook signature" });
       }
-      if (hasProcessedWebhook(eventId)) return json(res, 200, { ok: true, duplicate: true });
+      if (await hasProcessedWebhook(eventId)) return json(res, 200, { ok: true, duplicate: true });
 
-      const order = findOrderFromWebhookPayload(payload);
+      const order = await findOrderFromWebhookPayload(payload);
       const payment = payload.payload?.payment?.entity || {};
       if (order && payload.event === "payment.captured") {
-        const paidOrder = updateOrder(order.id, {
+        const paidOrder = await updateOrder(order.id, {
           status: "paid",
           payment_status: "captured",
           razorpay_payment_id: payment.id,
@@ -741,7 +773,7 @@ async function handleApi(req, res, url) {
           try {
             await fulfillPaidOrder(paidOrder, { razorpay_payment_id: payment.id });
           } catch (error) {
-            updateOrder(paidOrder.id, {
+            await updateOrder(paidOrder.id, {
               status: "paid_shipping_failed",
               shipping_status: "failed",
               error: error.message,
@@ -749,16 +781,16 @@ async function handleApi(req, res, url) {
           }
         }
       } else if (order && payload.event === "payment.failed") {
-        updateOrder(order.id, {
+        await updateOrder(order.id, {
           status: "payment_failed",
           payment_status: "failed",
           error: payment.error_description || "Payment failed",
         });
       } else if (order && payload.event === "payment.authorized") {
-        updateOrder(order.id, { payment_status: "authorized" });
+        await updateOrder(order.id, { payment_status: "authorized" });
       }
 
-      saveProcessedWebhook(eventId, "razorpay", payload.event);
+      await saveProcessedWebhook(eventId, "razorpay", payload.event);
       return json(res, 200, { ok: true });
     }
 
@@ -768,7 +800,7 @@ async function handleApi(req, res, url) {
         return json(res, 401, { error: "Invalid webhook token" });
       }
 
-      const order = findShiprocketOrder(payload);
+      const order = await findShiprocketOrder(payload);
       if (order) {
         const shippingStatus =
           payload.current_status ||
@@ -776,14 +808,14 @@ async function handleApi(req, res, url) {
           payload.status ||
           payload.current_tracking_status?.current_status ||
           "updated";
-        updateOrder(order.id, {
+        await updateOrder(order.id, {
           shipping_status: shippingStatus,
           status: String(shippingStatus).toLowerCase().includes("delivered") ? "delivered" : order.status,
           shiprocket_order_id: payload.order_id || payload.shiprocket_order_id || payload.sr_order_id || order.shiprocket_order_id,
           awb_code: payload.awb || payload.awb_code || payload.current_tracking_status?.awb_code || order.awb_code,
         });
       }
-      saveProcessedWebhook(payload.event_id || payload.id || `${Date.now()}`, "shiprocket", payload.event || payload.status || "shipment_update");
+      await saveProcessedWebhook(payload.event_id || payload.id || `${Date.now()}`, "shiprocket", payload.event || payload.status || "shipment_update");
       return json(res, 200, { ok: true });
     }
 
@@ -793,20 +825,21 @@ async function handleApi(req, res, url) {
 
     if (req.method === "POST" && url.pathname === "/api/razorpay/verify") {
       if (!verifyRazorpaySignature(payload.payment || {})) {
-        updateOrder(payload.payment?.razorpay_order_id, {
+        await updateOrder(payload.payment?.razorpay_order_id, {
           status: "payment_failed",
           payment_status: "signature_failed",
           error: "Payment signature verification failed",
         });
         return json(res, 400, { error: "Payment signature verification failed" });
       }
-      updateOrder(payload.payment.razorpay_order_id, {
+      await updateOrder(payload.payment.razorpay_order_id, {
         status: "paid",
         payment_status: "captured",
         razorpay_payment_id: payload.payment.razorpay_payment_id,
       });
       try {
-        const paidOrder = readOrders().find((order) => order.razorpay_order_id === payload.payment.razorpay_order_id);
+        const orders = await readOrders();
+        const paidOrder = orders.find((order) => order.razorpay_order_id === payload.payment.razorpay_order_id);
         const { updatedOrder, shiprocketOrder } = await fulfillPaidOrder(paidOrder, payload.payment);
         return json(res, 200, {
           verified: true,
@@ -815,7 +848,7 @@ async function handleApi(req, res, url) {
           ...shiprocketOrder,
         });
       } catch (error) {
-        const updatedOrder = updateOrder(payload.payment.razorpay_order_id, {
+        const updatedOrder = await updateOrder(payload.payment.razorpay_order_id, {
           status: "paid_shipping_failed",
           shipping_status: "failed",
           error: error.message,
@@ -826,9 +859,9 @@ async function handleApi(req, res, url) {
             subject: `Order confirmed: ${updatedOrder.id}`,
             html: `<h1>Your carddesign.skin order is confirmed</h1><p>Order ID: <strong>${updatedOrder.id}</strong></p><p>We will follow up on shipping shortly.</p>`,
           });
-          updateOrder(updatedOrder.id, { email_status: confirmationEmail.status });
+          await updateOrder(updatedOrder.id, { email_status: confirmationEmail.status });
         } catch (emailError) {
-          updateOrder(updatedOrder.id, { email_status: "failed", email_error: emailError.message });
+          await updateOrder(updatedOrder.id, { email_status: "failed", email_error: emailError.message });
         }
         return json(res, 200, {
           verified: true,
