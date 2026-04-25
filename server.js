@@ -14,14 +14,14 @@ const WEBHOOK_EVENTS_FILE = path.join(DATA_DIR, "webhook-events.json");
 const adminSessions = new Set();
 
 const products = [
-  { id: "noir-neon", name: "Noir Neon", price: 299 },
-  { id: "cyber-wave", name: "Cyber Wave", price: 279 },
-  { id: "metro-midnight", name: "Metro Midnight", price: 249 },
-  { id: "anime-surge", name: "Anime Surge", price: 329 },
-  { id: "black-gold", name: "Black Gold", price: 349 },
-  { id: "pixel-pop", name: "Pixel Pop", price: 229 },
-  { id: "carbon-rush", name: "Carbon Rush", price: 299 },
-  { id: "silver-static", name: "Silver Static", price: 319 },
+  { id: "noir-neon", name: "Noir Neon", price: 99 },
+  { id: "cyber-wave", name: "Cyber Wave", price: 99 },
+  { id: "metro-midnight", name: "Metro Midnight", price: 99 },
+  { id: "anime-surge", name: "Anime Surge", price: 99 },
+  { id: "black-gold", name: "Black Gold", price: 99 },
+  { id: "pixel-pop", name: "Pixel Pop", price: 99 },
+  { id: "carbon-rush", name: "Carbon Rush", price: 99 },
+  { id: "silver-static", name: "Silver Static", price: 99 },
 ];
 
 const mimeTypes = {
@@ -211,9 +211,20 @@ function calculateOrder(items = []) {
     throw new Error("Invalid cart items");
   }
 
-  const subtotal = lines.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = subtotal > 499 ? 0 : 49;
-  return { lines, subtotal, shipping, total: subtotal + shipping };
+  const grossSubtotal = lines.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  const unitPrices = [];
+  lines.forEach((item) => {
+    for (let i = 0; i < item.quantity; i += 1) unitPrices.push(item.price);
+  });
+  unitPrices.sort((a, b) => a - b);
+  const freeCount = Math.floor(unitPrices.length / 3);
+  let discount = 0;
+  for (let i = 0; i < freeCount; i += 1) discount += unitPrices[i];
+
+  const subtotal = grossSubtotal - discount;
+  const shipping = subtotal >= 499 || subtotal === 0 ? 0 : 49;
+  return { lines, grossSubtotal, discount, subtotal, shipping, total: subtotal + shipping };
 }
 
 async function shiprocketRequest(pathname, options = {}) {

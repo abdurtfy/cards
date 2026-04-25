@@ -1,5 +1,7 @@
 const summaryItems = document.querySelector("#summaryItems");
 const subtotal = document.querySelector("#subtotal");
+const discountRow = document.querySelector("#discountRow");
+const discount = document.querySelector("#discount");
 const shipping = document.querySelector("#shipping");
 const total = document.querySelector("#total");
 const checkoutForm = document.querySelector("#checkoutForm");
@@ -7,7 +9,14 @@ const checkoutStatus = document.querySelector("#checkoutStatus");
 
 function renderSummary() {
   const lines = getCartLines();
-  subtotal.textContent = formatCurrency(getSubtotal());
+  subtotal.textContent = formatCurrency(getGrossSubtotal());
+  const discountValue = getBuy2Get1Discount();
+  if (discountValue > 0) {
+    discountRow.hidden = false;
+    discount.textContent = `- ${formatCurrency(discountValue)}`;
+  } else {
+    discountRow.hidden = true;
+  }
   shipping.textContent = formatCurrency(getShippingCost());
   total.textContent = formatCurrency(getTotal());
 
