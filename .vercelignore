@@ -1,0 +1,11 @@
+.git
+.replit
+replit.nix
+replit.md
+.local
+.agents
+.cache
+.env
+.env.example
+zipFile.zip
+*.zip

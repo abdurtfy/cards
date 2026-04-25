@@ -901,16 +901,20 @@ function serveStatic(req, res, url) {
   });
 }
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+function requestListener(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   if (url.pathname.startsWith("/api/")) {
     handleApi(req, res, url);
     return;
   }
   serveStatic(req, res, url);
-});
+}
 
-const HOST = process.env.HOST || "0.0.0.0";
-server.listen(PORT, HOST, () => {
-  console.log(`carddesign.skin running at http://${HOST}:${PORT}`);
-});
+if (require.main === module) {
+  const HOST = process.env.HOST || "0.0.0.0";
+  http.createServer(requestListener).listen(PORT, HOST, () => {
+    console.log(`carddesign.skin running at http://${HOST}:${PORT}`);
+  });
+}
+
+module.exports = requestListener;
