@@ -886,8 +886,8 @@ function serveStatic(req, res, url) {
 
   fs.readFile(filePath, (error, content) => {
     if (error) {
-      res.writeHead(404);
-      res.end("Not found");
+      res.writeHead(302, { Location: "/" });
+      res.end();
       return;
     }
     const headers = {
