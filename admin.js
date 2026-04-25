@@ -2,6 +2,7 @@ const ordersList = document.querySelector("#ordersList");
 const orderCount = document.querySelector("#orderCount");
 const refreshOrders = document.querySelector("#refreshOrders");
 const logoutButton = document.querySelector("#logoutButton");
+const catalogList = document.querySelector("#catalogList");
 
 function formatCurrency(value) {
   return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
@@ -93,5 +94,79 @@ logoutButton.addEventListener("click", async () => {
   window.location.href = "./admin-login.html";
 });
 
+function renderCatalog(items) {
+  catalogList.innerHTML = items
+    .map(
+      (p) => `
+        <div class="catalog-row" data-id="${p.id}">
+          <div>
+            <strong>${p.name}</strong>
+            <span class="stock-tag ${p.stock > 0 ? "in" : "out"}">${p.stock > 0 ? "Available" : "Out of stock"}</span>
+          </div>
+          <div>
+            <label>Price (Rs)</label>
+            <input type="number" min="0" step="1" data-field="price" value="${p.price}" />
+          </div>
+          <div>
+            <label>Stock</label>
+            <input type="number" min="0" step="1" data-field="stock" value="${p.stock}" />
+          </div>
+          <button class="secondary-action" type="button" data-save="${p.id}">Save</button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+async function loadCatalog() {
+  try {
+    const response = await fetch("/api/admin/products");
+    if (response.status === 401) {
+      window.location.href = "./admin-login.html";
+      return;
+    }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load products");
+    renderCatalog(data.products);
+  } catch (error) {
+    catalogList.innerHTML = `<p class="status-line">${error.message}</p>`;
+  }
+}
+
+catalogList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-save]");
+  if (!button) return;
+  const row = button.closest(".catalog-row");
+  const id = button.dataset.save;
+  const price = Number(row.querySelector('[data-field="price"]').value);
+  const stock = Number(row.querySelector('[data-field="stock"]').value);
+  button.disabled = true;
+  button.textContent = "Saving...";
+  try {
+    const response = await fetch("/api/admin/products", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, price, stock }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not save");
+    button.textContent = "Saved";
+    setTimeout(() => {
+      button.textContent = "Save";
+      button.disabled = false;
+    }, 900);
+    const tag = row.querySelector(".stock-tag");
+    if (tag) {
+      tag.className = `stock-tag ${data.product.stock > 0 ? "in" : "out"}`;
+      tag.textContent = data.product.stock > 0 ? "Available" : "Out of stock";
+    }
+  } catch (error) {
+    button.textContent = "Retry";
+    button.disabled = false;
+    alert(error.message);
+  }
+});
+
 refreshOrders.addEventListener("click", loadOrders);
+loadCatalog();
 loadOrders();

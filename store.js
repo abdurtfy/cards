@@ -67,6 +67,27 @@ const products = [
 
 let cart = JSON.parse(localStorage.getItem("carddesign-cart") || "{}");
 
+products.forEach((p) => {
+  if (typeof p.stock !== "number") p.stock = 100;
+});
+
+async function loadLiveProducts() {
+  try {
+    const response = await fetch("/api/products");
+    if (!response.ok) return;
+    const data = await response.json();
+    (data.products || []).forEach((live) => {
+      const local = products.find((p) => p.id === live.id);
+      if (!local) return;
+      if (typeof live.price === "number") local.price = live.price;
+      if (typeof live.stock === "number") local.stock = live.stock;
+    });
+    document.dispatchEvent(new CustomEvent("products:updated"));
+    renderSharedCart();
+  } catch {}
+}
+loadLiveProducts();
+
 function formatCurrency(value) {
   return `Rs ${value.toLocaleString("en-IN")}`;
 }
@@ -115,7 +136,11 @@ function getTotal() {
 }
 
 function addToCart(id) {
-  cart[id] = (cart[id] || 0) + 1;
+  const product = products.find((item) => item.id === id);
+  if (!product || product.stock <= 0) return;
+  const current = cart[id] || 0;
+  if (current + 1 > product.stock) return;
+  cart[id] = current + 1;
   saveCart();
   renderSharedCart();
 }

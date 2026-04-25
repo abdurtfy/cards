@@ -11,9 +11,10 @@ const PUBLIC_DIR = __dirname;
 const DATA_DIR = path.join(__dirname, "data");
 const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
 const WEBHOOK_EVENTS_FILE = path.join(DATA_DIR, "webhook-events.json");
+const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 const adminSessions = new Set();
 
-const products = [
+const baseProducts = [
   { id: "noir-neon", name: "Noir Neon", price: 99 },
   { id: "cyber-wave", name: "Cyber Wave", price: 99 },
   { id: "metro-midnight", name: "Metro Midnight", price: 99 },
@@ -23,6 +24,32 @@ const products = [
   { id: "carbon-rush", name: "Carbon Rush", price: 99 },
   { id: "silver-static", name: "Silver Static", price: 99 },
 ];
+
+function readProductOverrides() {
+  if (!fs.existsSync(PRODUCTS_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(PRODUCTS_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeProductOverrides(data) {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(data, null, 2));
+}
+
+function getProducts() {
+  const overrides = readProductOverrides();
+  return baseProducts.map((p) => {
+    const o = overrides[p.id] || {};
+    return {
+      ...p,
+      price: typeof o.price === "number" ? o.price : p.price,
+      stock: typeof o.stock === "number" ? o.stock : 100,
+    };
+  });
+}
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -200,10 +227,14 @@ function readBody(req) {
 }
 
 function calculateOrder(items = []) {
+  const catalog = getProducts();
   const lines = items.map((item) => {
-    const product = products.find((candidate) => candidate.id === item.id);
+    const product = catalog.find((candidate) => candidate.id === item.id);
     const quantity = Number(item.quantity || 0);
     if (!product || quantity < 1) return null;
+    if (product.stock <= 0 || quantity > product.stock) {
+      throw new Error(`${product.name} is out of stock`);
+    }
     return { ...product, quantity };
   });
 
@@ -556,6 +587,10 @@ async function handleApi(req, res, url) {
     const body = req.method === "GET" ? { raw: "", json: {} } : await readBody(req);
     const payload = body.json;
 
+    if (req.method === "GET" && url.pathname === "/api/products") {
+      return json(res, 200, { products: getProducts() });
+    }
+
     if (req.method === "POST" && url.pathname === "/api/admin/login") {
       if (!process.env.ADMIN_PASSWORD) {
         return json(res, 500, { error: "Admin password is not configured" });
@@ -580,6 +615,36 @@ async function handleApi(req, res, url) {
 
     if (req.method === "GET" && url.pathname === "/api/admin/orders") {
       return json(res, 200, { orders: readOrders().map(publicOrder) });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/products") {
+      return json(res, 200, { products: getProducts() });
+    }
+
+    if (req.method === "PUT" && url.pathname === "/api/admin/products") {
+      const id = String(payload.id || "");
+      const product = baseProducts.find((p) => p.id === id);
+      if (!product) return json(res, 404, { error: "Product not found" });
+      const overrides = readProductOverrides();
+      const current = overrides[id] || {};
+      const next = { ...current };
+      if (payload.price !== undefined) {
+        const price = Number(payload.price);
+        if (!Number.isFinite(price) || price < 0) {
+          return json(res, 400, { error: "Invalid price" });
+        }
+        next.price = Math.round(price);
+      }
+      if (payload.stock !== undefined) {
+        const stock = Number(payload.stock);
+        if (!Number.isFinite(stock) || stock < 0) {
+          return json(res, 400, { error: "Invalid stock" });
+        }
+        next.stock = Math.floor(stock);
+      }
+      overrides[id] = next;
+      writeProductOverrides(overrides);
+      return json(res, 200, { product: getProducts().find((p) => p.id === id) });
     }
 
     if (req.method === "GET" && url.pathname === "/api/order/confirmation") {
