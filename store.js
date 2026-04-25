@@ -135,14 +135,38 @@ function getTotal() {
   return getSubtotal() + getShippingCost();
 }
 
+function showToast(message) {
+  let toast = document.querySelector("#cartToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "cartToast";
+    toast.className = "cart-toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.remove("show");
+  void toast.offsetWidth;
+  toast.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
 function addToCart(id) {
   const product = products.find((item) => item.id === id);
-  if (!product || product.stock <= 0) return;
+  if (!product) return;
+  if (product.stock <= 0) {
+    showToast(`${product.name} is out of stock`);
+    return;
+  }
   const current = cart[id] || 0;
-  if (current + 1 > product.stock) return;
+  if (current + 1 > product.stock) {
+    showToast(`Only ${product.stock} of ${product.name} available`);
+    return;
+  }
   cart[id] = current + 1;
   saveCart();
   renderSharedCart();
+  showToast(`Added ${product.name} to cart`);
 }
 
 function decreaseCart(id) {
@@ -158,10 +182,55 @@ function renderSharedCart() {
   const itemCount = lines.reduce((sum, item) => sum + item.quantity, 0);
   const cartCount = document.querySelector("#cartCount");
   const drawerTotal = document.querySelector("#drawerTotal");
+  const drawerSubtotal = document.querySelector("#drawerSubtotal");
+  const drawerShipping = document.querySelector("#drawerShipping");
+  const drawerDiscountRow = document.querySelector("#drawerDiscountRow");
+  const drawerDiscount = document.querySelector("#drawerDiscount");
+  const cartPromoMsg = document.querySelector("#cartPromoMsg");
+  const cartShipMsg = document.querySelector("#cartShipMsg");
   const cartItems = document.querySelector("#cartItems");
 
+  const discountValue = getBuy2Get1Discount();
+  const subtotal = getSubtotal();
+  const shippingCost = getShippingCost();
+
   if (cartCount) cartCount.textContent = itemCount;
+  if (drawerSubtotal) drawerSubtotal.textContent = formatCurrency(getGrossSubtotal());
+  if (drawerShipping) {
+    drawerShipping.textContent = shippingCost === 0 ? "Free" : formatCurrency(shippingCost);
+  }
+  if (drawerDiscountRow && drawerDiscount) {
+    if (discountValue > 0) {
+      drawerDiscountRow.hidden = false;
+      drawerDiscount.textContent = `- ${formatCurrency(discountValue)}`;
+    } else {
+      drawerDiscountRow.hidden = true;
+    }
+  }
   if (drawerTotal) drawerTotal.textContent = formatCurrency(getTotal());
+
+  if (cartPromoMsg) {
+    const remainder = itemCount % 3;
+    if (itemCount === 0) {
+      cartPromoMsg.textContent = "Add 3 items and the cheapest is free.";
+    } else if (remainder === 0) {
+      cartPromoMsg.textContent = `Buy 2 Get 1 Free applied. ${discountValue > 0 ? formatCurrency(discountValue) + " off." : ""}`;
+    } else {
+      const need = 3 - remainder;
+      cartPromoMsg.textContent = `Add ${need} more item${need === 1 ? "" : "s"} to get 1 free.`;
+    }
+  }
+
+  if (cartShipMsg) {
+    if (subtotal === 0) {
+      cartShipMsg.textContent = "Free shipping over Rs 499.";
+    } else if (shippingCost === 0) {
+      cartShipMsg.textContent = "You unlocked free shipping.";
+    } else {
+      const left = 499 - subtotal;
+      cartShipMsg.textContent = `Add ${formatCurrency(left)} more for free shipping.`;
+    }
+  }
   if (cartItems) {
     cartItems.innerHTML = lines.length
       ? lines
