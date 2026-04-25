@@ -37,3 +37,11 @@ externalPort = 80
 [deployment]
 deploymentTarget = "vm"
 run = ["node", "server.js"]
+
+[userenv]
+
+[userenv.shared]
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = "465"
+SMTP_USER = "abdurtfy@gmail.com"
+EMAIL_FROM = "abdurtfy@gmail.com"
