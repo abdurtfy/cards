@@ -713,3 +713,25 @@ input:focus {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+[hidden] { display: none !important; }
+
+.cart-promo {
+  background: none;
+  border: none;
+  padding: 4px 16px 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cart-promo .promo-tag {
+  display: none;
+}
+.cart-promo .promo-msg {
+  margin: 2px 0;
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+}
+.cart-promo .promo-msg.ship {
+  color: rgba(255,255,255,0.45);
+}

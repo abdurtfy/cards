@@ -197,7 +197,11 @@ function renderSharedCart() {
   if (cartCount) cartCount.textContent = itemCount;
   if (drawerSubtotal) drawerSubtotal.textContent = formatCurrency(getGrossSubtotal());
   if (drawerShipping) {
-    drawerShipping.textContent = shippingCost === 0 ? "Free" : formatCurrency(shippingCost);
+    if (itemCount === 0) {
+      drawerShipping.textContent = "—";
+    } else {
+      drawerShipping.textContent = shippingCost === 0 ? "Free" : formatCurrency(shippingCost);
+    }
   }
   if (drawerDiscountRow && drawerDiscount) {
     if (discountValue > 0) {
@@ -212,9 +216,9 @@ function renderSharedCart() {
   if (cartPromoMsg) {
     const remainder = itemCount % 3;
     if (itemCount === 0) {
-      cartPromoMsg.textContent = "Add 3 items and the cheapest is free.";
+      cartPromoMsg.textContent = "Buy 2 get 1 free on every 3rd item.";
     } else if (remainder === 0) {
-      cartPromoMsg.textContent = `Buy 2 Get 1 Free applied. ${discountValue > 0 ? formatCurrency(discountValue) + " off." : ""}`;
+      cartPromoMsg.textContent = `Buy 2 get 1 free applied${discountValue > 0 ? ` (${formatCurrency(discountValue)} off)` : ""}.`;
     } else {
       const need = 3 - remainder;
       cartPromoMsg.textContent = `Add ${need} more item${need === 1 ? "" : "s"} to get 1 free.`;
@@ -225,7 +229,7 @@ function renderSharedCart() {
     if (subtotal === 0) {
       cartShipMsg.textContent = "Free shipping over Rs 499.";
     } else if (shippingCost === 0) {
-      cartShipMsg.textContent = "You unlocked free shipping.";
+      cartShipMsg.textContent = "Free shipping unlocked.";
     } else {
       const left = 499 - subtotal;
       cartShipMsg.textContent = `Add ${formatCurrency(left)} more for free shipping.`;
