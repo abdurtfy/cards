@@ -775,7 +775,7 @@ async function createShiprocketOrder({ items, customer, payment }) {
     sub_total: order.subtotal,
     length: 12,
     breadth: 9,
-    height: 1,
+    height: 0.5,
     weight: 0.05,
   };
 
