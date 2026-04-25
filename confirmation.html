@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Confirmed | carddesign.skin</title>
+    <meta name="description" content="Order confirmation for carddesign.skin." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="carddesign.skin home">
+        <span class="brand-mark"></span>
+        <span>carddesign.skin</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="./index.html">Products</a>
+        <a href="./checkout.html">Checkout</a>
+      </nav>
+    </header>
+
+    <main class="checkout-page">
+      <section class="checkout-head" aria-labelledby="confirmationTitle">
+        <p class="eyebrow">Order placed</p>
+        <h1 id="confirmationTitle">Confirmed</h1>
+      </section>
+
+      <section class="confirmation-panel" id="confirmationPanel" aria-live="polite">
+        <p class="muted">Loading order...</p>
+      </section>
+    </main>
+
+    <script src="./confirmation.js"></script>
+  </body>
+</html>
