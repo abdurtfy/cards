@@ -1,0 +1,2 @@
+carddesign.skin running at http://0.0.0.0:5000
+Shiprocket error [33m422[39m on /orders/create/adhoc -> {"message":"Phone number is in invalid format","errors":{"billing_phone":["Phone number is in invalid format"]},"status_code":422}
