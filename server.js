@@ -414,29 +414,192 @@ function sendSmtpEmail({ to, subject, html }) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatINR(amount) {
+  const value = Number(amount || 0);
+  return `&#8377;${value.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function formatOrderDate(value) {
+  try {
+    const d = value ? new Date(value) : new Date();
+    return d.toLocaleString("en-IN", {
+      day: "numeric", month: "long", year: "numeric",
+      hour: "numeric", minute: "2-digit", hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
+  } catch { return ""; }
+}
+
+function buildOrderConfirmationEmail(order) {
+  const c = order.customer || {};
+  const placedOn = formatOrderDate(order.created_at);
+  const itemRows = (order.lines || []).map((item) => `
+    <tr>
+      <td style="padding:14px 16px;border-bottom:1px solid #1f1f1f;color:#f5f0e6;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.4;">
+        <div style="font-weight:600;color:#f5f0e6;">${escapeHtml(item.name)}</div>
+        <div style="color:#8a8275;font-size:12px;margin-top:4px;letter-spacing:0.06em;text-transform:uppercase;">SKU&nbsp;&middot;&nbsp;${escapeHtml(item.id)}</div>
+      </td>
+      <td align="center" style="padding:14px 16px;border-bottom:1px solid #1f1f1f;color:#cfc7b3;font-family:Georgia,'Times New Roman',serif;font-size:15px;">${item.quantity}</td>
+      <td align="right" style="padding:14px 16px;border-bottom:1px solid #1f1f1f;color:#f5f0e6;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:600;">${formatINR(item.price * item.quantity)}</td>
+    </tr>
+  `).join("");
+
+  const addressLine = [c.address, c.city, c.state, c.pin].filter(Boolean).map(escapeHtml).join(", ");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Order confirmed &middot; carddesign.skin</title>
+</head>
+<body style="margin:0;padding:0;background:#050505;font-family:Georgia,'Times New Roman',serif;color:#f5f0e6;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Your carddesign.skin order ${escapeHtml(order.id)} is confirmed. Total ${formatINR(order.total)}.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#050505;padding:32px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#0a0a0a;border:1px solid #1a1a1a;">
+      <tr><td style="padding:36px 40px 24px;text-align:center;border-bottom:1px solid #1a1a1a;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:0.42em;color:#c9a961;text-transform:uppercase;">carddesign.skin</div>
+        <h1 style="margin:18px 0 8px;font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:28px;letter-spacing:0.04em;color:#f5f0e6;">Your order is confirmed</h1>
+        <p style="margin:0;color:#8a8275;font-size:14px;letter-spacing:0.02em;">Thank you, ${escapeHtml((c.name || "").split(" ")[0] || "friend")} &mdash; we have received your order.</p>
+      </td></tr>
+
+      <tr><td style="padding:28px 40px 4px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="font-size:11px;letter-spacing:0.32em;color:#8a8275;text-transform:uppercase;padding-bottom:6px;">Order ID</td>
+            <td align="right" style="font-size:11px;letter-spacing:0.32em;color:#8a8275;text-transform:uppercase;padding-bottom:6px;">Placed on</td>
+          </tr>
+          <tr>
+            <td style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#c9a961;font-weight:600;">${escapeHtml(order.id)}</td>
+            <td align="right" style="font-family:Georgia,'Times New Roman',serif;font-size:14px;color:#cfc7b3;">${escapeHtml(placedOn)}</td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 8px;">
+        <div style="font-size:11px;letter-spacing:0.32em;color:#8a8275;text-transform:uppercase;margin-bottom:10px;">Items</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #1f1f1f;">
+          ${itemRows}
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:8px 40px 8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="padding:8px 0;color:#8a8275;font-size:14px;">Subtotal</td>
+            <td align="right" style="padding:8px 0;color:#cfc7b3;font-size:14px;">${formatINR(order.subtotal)}</td>
+          </tr>
+          ${order.discount > 0 ? `<tr>
+            <td style="padding:8px 0;color:#8a8275;font-size:14px;">Discount</td>
+            <td align="right" style="padding:8px 0;color:#cfc7b3;font-size:14px;">&minus; ${formatINR(order.discount)}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="padding:8px 0;color:#8a8275;font-size:14px;">Shipping</td>
+            <td align="right" style="padding:8px 0;color:#cfc7b3;font-size:14px;">${order.shipping ? formatINR(order.shipping) : "FREE"}</td>
+          </tr>
+          <tr><td colspan="2" style="border-top:1px solid #1f1f1f;padding-top:14px;"></td></tr>
+          <tr>
+            <td style="padding:6px 0 18px;color:#f5f0e6;font-size:16px;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;">Total</td>
+            <td align="right" style="padding:6px 0 18px;color:#c9a961;font-size:22px;font-weight:700;">${formatINR(order.total)}</td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:0 40px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111;border:1px solid #1f1f1f;">
+          <tr><td style="padding:20px 22px;">
+            <div style="font-size:11px;letter-spacing:0.32em;color:#c9a961;text-transform:uppercase;margin-bottom:10px;">Shipping to</div>
+            <div style="color:#f5f0e6;font-size:15px;font-weight:600;margin-bottom:4px;">${escapeHtml(c.name || "")}</div>
+            <div style="color:#cfc7b3;font-size:14px;line-height:1.6;">${addressLine}</div>
+            <div style="color:#8a8275;font-size:13px;margin-top:8px;">${escapeHtml(c.phone || "")} &middot; ${escapeHtml(c.email || "")}</div>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:0 40px 32px;">
+        <div style="background:#0d0d0d;border-left:2px solid #c9a961;padding:14px 18px;color:#cfc7b3;font-size:13px;line-height:1.7;">
+          We are crafting your card skins with care. You will receive a shipping update with tracking details as soon as your order leaves our studio &mdash; usually within 1&ndash;2 business days.
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;border-top:1px solid #1a1a1a;text-align:center;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:0.42em;color:#c9a961;text-transform:uppercase;margin-bottom:8px;">carddesign.skin</div>
+        <div style="color:#6b6557;font-size:12px;line-height:1.6;">Premium card skins, handcrafted in India.<br/>Need help? Reply to this email and we will get back to you.</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function buildShippingEmail(order) {
+  const c = order.customer || {};
+  const tracking = order.awb_code || "Will be shared shortly";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Your order is on the way &middot; carddesign.skin</title>
+</head>
+<body style="margin:0;padding:0;background:#050505;font-family:Georgia,'Times New Roman',serif;color:#f5f0e6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#050505;padding:32px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#0a0a0a;border:1px solid #1a1a1a;">
+      <tr><td style="padding:36px 40px 24px;text-align:center;border-bottom:1px solid #1a1a1a;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:0.42em;color:#c9a961;text-transform:uppercase;">carddesign.skin</div>
+        <h1 style="margin:18px 0 8px;font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:28px;letter-spacing:0.04em;color:#f5f0e6;">Your order is on the way</h1>
+        <p style="margin:0;color:#8a8275;font-size:14px;">Order ${escapeHtml(order.id)}</p>
+      </td></tr>
+
+      <tr><td style="padding:28px 40px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111;border:1px solid #1f1f1f;">
+          <tr><td style="padding:20px 22px;">
+            <div style="font-size:11px;letter-spacing:0.32em;color:#c9a961;text-transform:uppercase;margin-bottom:10px;">Tracking</div>
+            <div style="color:#f5f0e6;font-size:18px;font-weight:600;letter-spacing:0.04em;margin-bottom:6px;">${escapeHtml(tracking)}</div>
+            <div style="color:#8a8275;font-size:13px;">Shiprocket reference: ${escapeHtml(order.shiprocket_order_id || "Pending")}</div>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:0 40px 28px;">
+        <div style="font-size:11px;letter-spacing:0.32em;color:#8a8275;text-transform:uppercase;margin-bottom:10px;">Shipping to</div>
+        <div style="color:#f5f0e6;font-size:15px;font-weight:600;margin-bottom:4px;">${escapeHtml(c.name || "")}</div>
+        <div style="color:#cfc7b3;font-size:14px;line-height:1.6;">${[c.address, c.city, c.state, c.pin].filter(Boolean).map(escapeHtml).join(", ")}</div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;border-top:1px solid #1a1a1a;text-align:center;">
+        <div style="color:#6b6557;font-size:12px;line-height:1.6;">Thank you for choosing carddesign.skin.<br/>Reply to this email for any questions about your shipment.</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+}
+
 async function sendOrderEmails(order) {
-  const items = order.lines.map((item) => `<li>${item.name} x ${item.quantity}</li>`).join("");
   const confirmationEmail = await sendEmail({
     to: order.customer?.email,
-    subject: `Order confirmed: ${order.id}`,
-    html: `
-      <h1>Your carddesign.skin order is confirmed</h1>
-      <p>Order ID: <strong>${order.id}</strong></p>
-      <p>Total: <strong>Rs ${order.total}</strong></p>
-      <ul>${items}</ul>
-      <p>We will send another update when shipping moves forward.</p>
-    `,
+    subject: `Your carddesign.skin order ${order.id} is confirmed`,
+    html: buildOrderConfirmationEmail(order),
   });
 
   const shippingEmail = await sendEmail({
     to: order.customer?.email,
-    subject: `Shipping update: ${order.id}`,
-    html: `
-      <h1>Your order is being prepared for shipping</h1>
-      <p>Order ID: <strong>${order.id}</strong></p>
-      <p>Shiprocket order: <strong>${order.shiprocket_order_id || "Pending"}</strong></p>
-      <p>AWB: <strong>${order.awb_code || "Pending"}</strong></p>
-    `,
+    subject: `Your carddesign.skin order ${order.id} is on the way`,
+    html: buildShippingEmail(order),
   });
 
   return { confirmationEmail, shippingEmail };
@@ -951,3 +1114,6 @@ if (require.main === module) {
 }
 
 module.exports = requestListener;
+module.exports.requestListener = requestListener;
+module.exports.buildOrderConfirmationEmail = buildOrderConfirmationEmail;
+module.exports.buildShippingEmail = buildShippingEmail;

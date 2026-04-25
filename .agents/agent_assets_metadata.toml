@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Z_qiKU6GoghbaBA0XkMLv"
+uri = "file://screenshots/email-confirmation.jpg"
+type = "image"
+title = "Order confirmation email preview (sent to abdurtfy@gmail.com)"
