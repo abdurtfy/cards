@@ -616,10 +616,10 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     }
 
-    if (req.method === "POST" && url.pathname === "/api/webhooks/shiprocket") {
+    if (req.method === "POST" && url.pathname === "/api/webhooks/shipping") {
       const token = req.headers["x-shiprocket-token"] || url.searchParams.get("token");
       if (process.env.SHIPROCKET_WEBHOOK_TOKEN && token !== process.env.SHIPROCKET_WEBHOOK_TOKEN) {
-        return json(res, 401, { error: "Invalid Shiprocket webhook token" });
+        return json(res, 401, { error: "Invalid webhook token" });
       }
 
       const order = findShiprocketOrder(payload);
