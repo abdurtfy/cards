@@ -776,7 +776,7 @@ async function createShiprocketOrder({ items, customer, payment }) {
     length: 12,
     breadth: 9,
     height: 1,
-    weight: 0.2,
+    weight: 0.05,
   };
 
   const data = await shiprocketRequest("/orders/create/adhoc", {
