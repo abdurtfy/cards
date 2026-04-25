@@ -723,7 +723,13 @@ function serveStatic(req, res, url) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream" });
+    const headers = {
+      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
+    };
+    if (process.env.NODE_ENV !== "production") {
+      headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+    }
+    res.writeHead(200, headers);
     res.end(content);
   });
 }
@@ -737,6 +743,7 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, url);
 });
 
-server.listen(PORT, () => {
-  console.log(`carddesign.skin running at http://localhost:${PORT}`);
+const HOST = process.env.HOST || "0.0.0.0";
+server.listen(PORT, HOST, () => {
+  console.log(`carddesign.skin running at http://${HOST}:${PORT}`);
 });
