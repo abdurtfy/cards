@@ -427,7 +427,8 @@ function findShiprocketOrder(payload) {
 async function createRazorpayOrder(payload) {
   const order = calculateOrder(payload.items);
   const amount = order.total * 100;
-  const localOrderId = `cds_${Date.now()}`;
+  const localOrderId = `cds_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const confirmationToken = crypto.randomBytes(32).toString("base64url");
 
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
     const demoOrderId = `order_demo_${Date.now()}`;
@@ -437,6 +438,7 @@ async function createRazorpayOrder(payload) {
       status: "payment_pending",
       payment_status: "created_demo",
       shipping_status: "not_created",
+      confirmation_token: confirmationToken,
       customer: payload.customer,
       ...order,
       created_at: new Date().toISOString(),
@@ -474,6 +476,7 @@ async function createRazorpayOrder(payload) {
     status: "payment_pending",
     payment_status: data.status || "created",
     shipping_status: "not_created",
+    confirmation_token: confirmationToken,
     customer: payload.customer,
     ...order,
     created_at: new Date().toISOString(),
@@ -560,8 +563,16 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/order/confirmation") {
-      const order = readOrders().find((item) => item.id === url.searchParams.get("id"));
-      if (!order) return json(res, 404, { error: "Order not found" });
+      const id = url.searchParams.get("id");
+      const token = url.searchParams.get("token");
+      const order = readOrders().find((item) => item.id === id);
+      if (!order || !order.confirmation_token || !token || !safeCompare(token, order.confirmation_token)) {
+        return json(res, 404, { error: "Order not found" });
+      }
+      const paidStatuses = new Set(["paid", "ready_to_ship", "delivered", "paid_shipping_failed"]);
+      if (!paidStatuses.has(order.status)) {
+        return json(res, 404, { error: "Order not found" });
+      }
       return json(res, 200, { order: confirmationOrder(order) });
     }
 
@@ -651,7 +662,12 @@ async function handleApi(req, res, url) {
       try {
         const paidOrder = readOrders().find((order) => order.razorpay_order_id === payload.payment.razorpay_order_id);
         const { updatedOrder, shiprocketOrder } = await fulfillPaidOrder(paidOrder, payload.payment);
-        return json(res, 200, { verified: true, order: publicOrder(updatedOrder), ...shiprocketOrder });
+        return json(res, 200, {
+          verified: true,
+          order: publicOrder(updatedOrder),
+          confirmation_token: updatedOrder.confirmation_token,
+          ...shiprocketOrder,
+        });
       } catch (error) {
         const updatedOrder = updateOrder(payload.payment.razorpay_order_id, {
           status: "paid_shipping_failed",
@@ -668,7 +684,12 @@ async function handleApi(req, res, url) {
         } catch (emailError) {
           updateOrder(updatedOrder.id, { email_status: "failed", email_error: emailError.message });
         }
-        return json(res, 200, { verified: true, order: publicOrder(updatedOrder), shipping_error: error.message });
+        return json(res, 200, {
+          verified: true,
+          order: publicOrder(updatedOrder),
+          confirmation_token: updatedOrder.confirmation_token,
+          shipping_error: error.message,
+        });
       }
     }
 

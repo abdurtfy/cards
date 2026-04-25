@@ -1,18 +1,19 @@
 const confirmationPanel = document.querySelector("#confirmationPanel");
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order");
+const token = params.get("token");
 
 function formatCurrency(value) {
   return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
 async function loadConfirmation() {
-  if (!orderId) {
-    confirmationPanel.innerHTML = `<p class="status-line">Missing order ID.</p>`;
+  if (!orderId || !token) {
+    confirmationPanel.innerHTML = `<p class="status-line">Missing or invalid order link.</p>`;
     return;
   }
 
-  const response = await fetch(`/api/order/confirmation?id=${encodeURIComponent(orderId)}`);
+  const response = await fetch(`/api/order/confirmation?id=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`);
   const data = await response.json();
   if (!response.ok) {
     confirmationPanel.innerHTML = `<p class="status-line">${data.error || "Order not found"}</p>`;

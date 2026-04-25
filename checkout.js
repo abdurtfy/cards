@@ -103,13 +103,11 @@ checkoutForm.addEventListener("submit", async (event) => {
       },
       handler: async (payment) => {
         checkoutStatus.textContent = "Verifying payment and creating Shiprocket order...";
-        const verified = await postJson("/api/razorpay/verify", {
-          payment,
-          customer,
-          items: lines.map(({ id, quantity }) => ({ id, quantity })),
-        });
+        const verified = await postJson("/api/razorpay/verify", { payment });
         localStorage.removeItem("carddesign-cart");
-        window.location.href = `./confirmation.html?order=${encodeURIComponent(verified.order?.id || order.local_order_id)}`;
+        const finalId = verified.order?.id || order.local_order_id;
+        const token = verified.confirmation_token || "";
+        window.location.href = `./confirmation.html?order=${encodeURIComponent(finalId)}&token=${encodeURIComponent(token)}`;
       },
       theme: { color: "#ff3c8a" },
     });
