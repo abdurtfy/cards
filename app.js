@@ -14,7 +14,7 @@ function renderProducts() {
           </div>
           <div class="product-body">
             <h3>${product.name}</h3>
-            <p class="product-meta">${product.category} card skin · ${product.finish}</p>
+            <p class="product-meta">${product.description ? product.description : `${product.category} card skin · ${product.finish}`}</p>
             <div class="product-footer">
               <span class="price">${formatCurrency(product.price)}</span>
               <button class="add-button" type="button" data-add="${product.id}"${out ? " disabled" : ""}>${out ? "Sold out" : "Add to cart"}</button>

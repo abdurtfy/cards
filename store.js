@@ -83,6 +83,7 @@ async function loadLiveProducts() {
       if (typeof live.stock === "number") local.stock = live.stock;
       if (typeof live.name === "string" && live.name) local.name = live.name;
       if (typeof live.image === "string" && live.image) local.image = live.image;
+      if (typeof live.description === "string") local.description = live.description;
     });
     document.dispatchEvent(new CustomEvent("products:updated"));
     renderSharedCart();

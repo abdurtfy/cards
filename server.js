@@ -49,6 +49,7 @@ function getProducts() {
       price: typeof o.price === "number" ? o.price : p.price,
       stock: typeof o.stock === "number" ? o.stock : 100,
       image: typeof o.image === "string" ? o.image : null,
+      description: typeof o.description === "string" ? o.description : "",
     };
   });
 }
@@ -662,6 +663,13 @@ async function handleApi(req, res, url) {
           return json(res, 400, { error: "Invalid stock" });
         }
         next.stock = Math.floor(stock);
+      }
+      if (payload.description !== undefined) {
+        const description = String(payload.description || "").trim();
+        if (description.length > 200) {
+          return json(res, 400, { error: "Description too long (max 200 chars)" });
+        }
+        next.description = description;
       }
       overrides[id] = next;
       writeProductOverrides(overrides);

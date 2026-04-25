@@ -113,9 +113,8 @@ function renderCatalog(items) {
     .map(
       (p) => `
         <div class="catalog-row" data-id="${p.id}">
-          <div>
-            <label>Name</label>
-            <input type="text" data-field="name" value="${p.name.replace(/"/g, "&quot;")}" />
+          <div class="catalog-name">
+            <strong>${p.name}</strong>
             <span class="stock-tag ${p.stock > 0 ? "in" : "out"}">${p.stock > 0 ? "Available" : "Out of stock"}</span>
           </div>
           <div>
@@ -140,8 +139,11 @@ function renderImages(items) {
         <div class="image-row" data-id="${p.id}">
           <div class="image-preview" style="${p.image ? `background:#111 center/cover url('${p.image}');` : `--skin-bg: linear-gradient(135deg, #1f2937, #111827);`}"></div>
           <div class="image-info">
-            <strong>${p.name}</strong>
-            <p class="muted">${p.image ? p.image.split("/").pop() : "No image uploaded"}</p>
+            <p class="muted image-filename">${p.image ? p.image.split("/").pop() : "No image uploaded"}</p>
+            <label>Name</label>
+            <input type="text" data-field="name" maxlength="80" value="${(p.name || "").replace(/"/g, "&quot;")}" />
+            <label>Description</label>
+            <input type="text" data-field="description" maxlength="200" placeholder="${p.category} card skin · ${p.finish || ""}" value="${(p.description || "").replace(/"/g, "&quot;")}" />
           </div>
           <div class="image-actions">
             <label class="secondary-action upload-label">
@@ -149,6 +151,7 @@ function renderImages(items) {
               <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-upload="${p.id}" hidden />
             </label>
             ${p.image ? `<button class="secondary-action" type="button" data-remove-image="${p.id}">Remove</button>` : ""}
+            <button class="secondary-action" type="button" data-save-text="${p.id}">Save text</button>
           </div>
         </div>
       `,
@@ -178,20 +181,15 @@ catalogList.addEventListener("click", async (event) => {
   if (!button) return;
   const row = button.closest(".catalog-row");
   const id = button.dataset.save;
-  const name = row.querySelector('[data-field="name"]').value.trim();
   const price = Number(row.querySelector('[data-field="price"]').value);
   const stock = Number(row.querySelector('[data-field="stock"]').value);
-  if (!name) {
-    alert("Name cannot be empty");
-    return;
-  }
   button.disabled = true;
   button.textContent = "Saving...";
   try {
     const response = await fetch("/api/admin/products", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, name, price, stock }),
+      body: JSON.stringify({ id, price, stock }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not save");
@@ -263,6 +261,41 @@ imagesList.addEventListener("change", async (event) => {
 });
 
 imagesList.addEventListener("click", async (event) => {
+  const saveText = event.target.closest("[data-save-text]");
+  if (saveText) {
+    const row = saveText.closest(".image-row");
+    const id = saveText.dataset.saveText;
+    const name = row.querySelector('[data-field="name"]').value.trim();
+    const description = row.querySelector('[data-field="description"]').value.trim();
+    if (!name) {
+      alert("Name cannot be empty");
+      return;
+    }
+    saveText.disabled = true;
+    saveText.textContent = "Saving...";
+    try {
+      const response = await fetch("/api/admin/products", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name, description }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not save");
+      saveText.textContent = "Saved";
+      setTimeout(() => {
+        saveText.textContent = "Save text";
+        saveText.disabled = false;
+      }, 900);
+      const stockRow = catalogList.querySelector(`.catalog-row[data-id="${id}"] .catalog-name strong`);
+      if (stockRow) stockRow.textContent = data.product.name;
+    } catch (error) {
+      saveText.textContent = "Retry";
+      saveText.disabled = false;
+      alert(error.message);
+    }
+    return;
+  }
+
   const button = event.target.closest("[data-remove-image]");
   if (!button) return;
   const id = button.dataset.removeImage;
