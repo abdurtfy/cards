@@ -81,6 +81,8 @@ async function loadLiveProducts() {
       if (!local) return;
       if (typeof live.price === "number") local.price = live.price;
       if (typeof live.stock === "number") local.stock = live.stock;
+      if (typeof live.name === "string" && live.name) local.name = live.name;
+      if (typeof live.image === "string" && live.image) local.image = live.image;
     });
     document.dispatchEvent(new CustomEvent("products:updated"));
     renderSharedCart();
@@ -241,7 +243,7 @@ function renderSharedCart() {
           .map(
             (item) => `
               <div class="cart-item">
-                <div class="cart-thumb" style="--skin-bg: ${item.bg}"></div>
+                <div class="cart-thumb" style="${item.image ? `background:#111 center/cover url('${item.image}');` : `--skin-bg: ${item.bg};`}"></div>
                 <div>
                   <strong>${item.name}</strong>
                   <span>${formatCurrency(item.price)} · ${item.finish}</span>

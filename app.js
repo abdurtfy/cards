@@ -4,9 +4,12 @@ function renderProducts() {
   productGrid.innerHTML = products
     .map((product) => {
       const out = product.stock <= 0;
+      const artStyle = product.image
+        ? `background: #111 center/cover url('${product.image}');`
+        : `--skin-bg: ${product.bg};`;
       return `
         <article class="product-card${out ? " out-of-stock" : ""}">
-          <div class="product-art" style="--skin-bg: ${product.bg}">
+          <div class="product-art${product.image ? " has-image" : ""}" style="${artStyle}">
             ${out ? `<span class="stock-badge">Out of stock</span>` : ""}
           </div>
           <div class="product-body">

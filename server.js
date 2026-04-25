@@ -45,10 +45,17 @@ function getProducts() {
     const o = overrides[p.id] || {};
     return {
       ...p,
+      name: typeof o.name === "string" && o.name.trim() ? o.name.trim() : p.name,
       price: typeof o.price === "number" ? o.price : p.price,
       stock: typeof o.stock === "number" ? o.stock : 100,
+      image: typeof o.image === "string" ? o.image : null,
     };
   });
+}
+
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+function ensureUploadsDir() {
+  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 const mimeTypes = {
@@ -56,6 +63,12 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
 };
 
 function loadEnvFile(filePath) {
@@ -209,12 +222,12 @@ function confirmationOrder(order) {
   };
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = 1_000_000) {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) reject(new Error("Request body too large"));
+      if (body.length > maxBytes) reject(new Error("Request body too large"));
     });
     req.on("end", () => {
       try {
@@ -584,7 +597,8 @@ async function createShiprocketOrder({ items, customer, payment }) {
 
 async function handleApi(req, res, url) {
   try {
-    const body = req.method === "GET" ? { raw: "", json: {} } : await readBody(req);
+    const isUpload = req.method === "POST" && url.pathname === "/api/admin/products/upload";
+    const body = req.method === "GET" ? { raw: "", json: {} } : await readBody(req, isUpload ? 6_000_000 : 1_000_000);
     const payload = body.json;
 
     if (req.method === "GET" && url.pathname === "/api/products") {
@@ -628,6 +642,13 @@ async function handleApi(req, res, url) {
       const overrides = readProductOverrides();
       const current = overrides[id] || {};
       const next = { ...current };
+      if (payload.name !== undefined) {
+        const name = String(payload.name || "").trim();
+        if (!name || name.length > 80) {
+          return json(res, 400, { error: "Invalid name" });
+        }
+        next.name = name;
+      }
       if (payload.price !== undefined) {
         const price = Number(payload.price);
         if (!Number.isFinite(price) || price < 0) {
@@ -644,6 +665,38 @@ async function handleApi(req, res, url) {
       }
       overrides[id] = next;
       writeProductOverrides(overrides);
+      return json(res, 200, { product: getProducts().find((p) => p.id === id) });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/admin/products/upload") {
+      const id = String(payload.id || "");
+      const product = baseProducts.find((p) => p.id === id);
+      if (!product) return json(res, 404, { error: "Product not found" });
+      const dataUrl = String(payload.dataUrl || "");
+      const match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,(.+)$/);
+      if (!match) return json(res, 400, { error: "Send a PNG, JPG, WEBP or GIF image" });
+      const ext = match[1] === "jpeg" ? "jpg" : match[1];
+      const buffer = Buffer.from(match[2], "base64");
+      if (buffer.length > 4_000_000) return json(res, 400, { error: "Image must be under 4 MB" });
+      ensureUploadsDir();
+      const filename = `${id}-${Date.now()}.${ext}`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
+      const overrides = readProductOverrides();
+      overrides[id] = { ...(overrides[id] || {}), image: `/uploads/${filename}` };
+      writeProductOverrides(overrides);
+      return json(res, 200, { product: getProducts().find((p) => p.id === id) });
+    }
+
+    if (req.method === "DELETE" && url.pathname === "/api/admin/products/image") {
+      const id = String(payload.id || "");
+      const product = baseProducts.find((p) => p.id === id);
+      if (!product) return json(res, 404, { error: "Product not found" });
+      const overrides = readProductOverrides();
+      if (overrides[id]) {
+        const { image, ...rest } = overrides[id];
+        overrides[id] = rest;
+        writeProductOverrides(overrides);
+      }
       return json(res, 200, { product: getProducts().find((p) => p.id === id) });
     }
 
