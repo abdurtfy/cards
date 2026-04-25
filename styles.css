@@ -1,15 +1,15 @@
 :root {
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f4f4f4;
-  --ink: #0a0a0a;
-  --muted: #6b6b6b;
-  --line: rgba(10, 10, 10, 0.12);
-  --hot: #0a0a0a;
-  --acid: #0a0a0a;
-  --cyan: #0a0a0a;
+  --bg: #0a0a0a;
+  --surface: #131313;
+  --surface-2: #1c1c1c;
+  --ink: #f5f1e8;
+  --muted: #8a857a;
+  --line: rgba(245, 241, 232, 0.12);
+  --hot: #d4af6a;
+  --acid: #d4af6a;
+  --cyan: #f5f1e8;
   --radius: 4px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -47,7 +47,7 @@ input {
   min-height: 72px;
   padding: 14px clamp(16px, 4vw, 56px);
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(10, 10, 10, 0.85);
   backdrop-filter: blur(18px);
 }
 
@@ -230,7 +230,7 @@ input {
   min-height: 46px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #ffffff;
+  background: var(--surface-2);
   color: var(--ink);
   padding: 0 14px;
   outline: 0;
@@ -287,8 +287,8 @@ input:focus {
 
 .primary-action:hover,
 .add-button:hover {
-  background: #2a2a2a;
-  border-color: #2a2a2a;
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .secondary-action:hover,
@@ -493,7 +493,7 @@ input:focus {
   height: 30px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--surface-2);
   color: var(--ink);
   cursor: pointer;
 }
@@ -676,7 +676,7 @@ input:focus {
 .catalog-row input {
   width: 100%; padding: 8px 10px;
   border-radius: 4px; border: 1px solid var(--line);
-  background: #ffffff; color: inherit; font: inherit;
+  background: var(--surface-2); color: inherit; font: inherit;
   min-height: 36px;
 }
 .catalog-row .stock-tag {
@@ -714,8 +714,8 @@ input:focus {
   position: fixed;
   left: 50%; bottom: 32px;
   transform: translate(-50%, 20px);
-  background: #0a0a0a; color: #fff;
-  border: 1px solid #0a0a0a;
+  background: var(--ink); color: var(--bg);
+  border: 1px solid var(--ink);
   padding: 12px 18px; border-radius: 999px;
   font-weight: 600; font-size: 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
@@ -752,13 +752,13 @@ input:focus {
 
 .marquee {
   overflow: hidden;
-  background: #0a0a0a;
-  color: #ffffff;
+  background: var(--hot);
+  color: #0a0a0a;
   padding: 8px 0;
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.14em;
-  border-bottom: 1px solid #0a0a0a;
+  border-bottom: 1px solid var(--hot);
 }
 .marquee-track {
   display: inline-flex;
@@ -858,7 +858,7 @@ input:focus {
   font-weight: 700;
 }
 .image-info input {
-  background: #ffffff;
+  background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 8px 10px;
@@ -901,7 +901,7 @@ input:focus {
   color: var(--ink);
   letter-spacing: 0.02em;
 }
-.info-body p { margin: 0 0 12px; color: #2a2a2a; }
+.info-body p { margin: 0 0 12px; color: var(--muted); }
 .info-body a {
   color: var(--ink);
   text-decoration: none;
